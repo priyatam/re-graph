@@ -88,11 +88,15 @@
      {:db (update-in db [:websocket :queue] conj dispatchable-event)}
 
      :else
-     (js/console.error
-       (str
-        "Error creating subscription " subscription-id
-        " on instance " instance-name
-         ": Websocket is not enabled, subscriptions are not possible. Please check your re-graph configuration")))))
+     #?(:cljs (js/console.error
+               (str
+                "Error creating subscription " subscription-id
+                " on instance " instance-name
+                ": Websocket is not enabled, subscriptions are not possible. Please check your re-graph configuration"))
+        :clj (println (str
+                       "Error creating subscription " subscription-id
+                       " on instance " instance-name
+                       ": Websocket is not enabled, subscriptions are not possible. Please check your re-graph configuration"))))))
 
 (defn subscribe
   ([subscription-id query variables callback-fn] (subscribe default-instance-name subscription-id query variables callback-fn))

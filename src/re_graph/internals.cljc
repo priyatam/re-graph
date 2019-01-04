@@ -31,9 +31,12 @@
                      (cons-interceptor (rfi/path :re-graph instance-name))
                      (assoc-coeffect :event trimmed-event))
 
-                 (do (js/console.error "No default instance of re-graph found but no valid instance name was provided. Valid instance names are:" (keys re-graph)
-                                       "but was provided with" provided-instance-name
-                                       "handling event" event-name)
+                 (do #?(:cljs (js/console.error "No default instance of re-graph found but no valid instance name was provided. Valid instance names are:" (keys re-graph)
+                                                "but was provided with" provided-instance-name
+                                                "handling event" event-name)
+                        :clj (println "No default instance of re-graph found but no valid instance name was provided. Valid instance names are:" (keys re-graph)
+                                      "but was provided with" provided-instance-name
+                                      "handling event" event-name))
                      ctx))))))
 
 (def interceptors
@@ -70,10 +73,11 @@
            (callback-fn (:body response))
            (callback-fn (insert-http-status (:body response) status)))))))
 
-(re-frame/reg-fx
- ::send-ws
- (fn [[websocket payload]]
-   (.send websocket (js/JSON.stringify (clj->js payload)))))
+#?(:cljs
+   (re-frame/reg-fx
+    ::send-ws
+    (fn [[websocket payload]]
+      (.send websocket (js/JSON.stringify (clj->js payload))))))
 
 (re-frame/reg-fx
  ::call-callback
@@ -145,20 +149,21 @@
       {:dispatch-later [{:ms reconnect-timeout
                          :dispatch [::reconnect-ws instance-name]}]}))))
 
-(defn- on-ws-message [instance-name]
-  (fn [m]
-    (let [data (js/JSON.parse (aget m "data"))]
-      (condp = (aget data "type")
-        "data"
-        (re-frame/dispatch [::on-ws-data instance-name (aget data "id") (js->clj (aget data "payload") :keywordize-keys true)])
+#?(:cljs
+   (defn- on-ws-message [instance-name]
+     (fn [m]
+       (let [data (js/JSON.parse (aget m "data"))]
+         (condp = (aget data "type")
+           "data"
+           (re-frame/dispatch [::on-ws-data instance-name (aget data "id") (js->clj (aget data "payload") :keywordize-keys true)])
 
-        "complete"
-        (re-frame/dispatch [::on-ws-complete instance-name (aget data "id")])
+           "complete"
+           (re-frame/dispatch [::on-ws-complete instance-name (aget data "id")])
 
-        "error"
-        (js/console.warn (str "GraphQL error for " instance-name " - " (aget data "id") ": " (aget data "payload" "message")))
+           "error"
+           (js/console.warn (str "GraphQL error for " instance-name " - " (aget data "id") ": " (aget data "payload" "message")))
 
-        (js/console.debug "Ignoring graphql-ws event " instance-name " - " (aget data "type"))))))
+           (js/console.debug "Ignoring graphql-ws event " instance-name " - " (aget data "type")))))))
 
 (defn- on-open [instance-name ws]
   (fn [e]
@@ -170,7 +175,8 @@
 
 (defn- on-error [instance-name]
   (fn [e]
-    (js/console.warn "GraphQL websocket error" instance-name e)))
+    #?(:cljs (js/console.warn "GraphQL websocket error" instance-name e)
+       :clj  (println "GraphQL websocket error" instance-name e))))
 
 (re-frame/reg-event-fx
  ::reconnect-ws
@@ -179,25 +185,27 @@
    (when-not (get-in db [:websocket :ready?])
      {::connect-ws [instance-name (get-in db [:websocket :url])]})))
 
-(re-frame/reg-fx
- ::connect-ws
- (fn [[instance-name ws-url]]
-   (let [ws (js/WebSocket. ws-url "graphql-ws")]
-     (aset ws "onmessage" (on-ws-message instance-name))
-     (aset ws "onopen" (on-open instance-name ws))
-     (aset ws "onclose" (on-close instance-name))
-     (aset ws "onerror" (on-error instance-name)))))
+#?(:cljs
+   (re-frame/reg-fx
+    ::connect-ws
+    (fn [[instance-name ws-url]]
+      (let [ws (js/WebSocket. ws-url "graphql-ws")]
+        (aset ws "onmessage" (on-ws-message instance-name))
+        (aset ws "onopen" (on-open instance-name ws))
+        (aset ws "onclose" (on-close instance-name))
+        (aset ws "onerror" (on-error instance-name))))))
 
 (re-frame/reg-fx
  ::disconnect-ws
  (fn [[ws]]
    (.close ws)))
 
-(defn default-ws-url []
-  (when (exists? (.-location js/window))
-    (let [host-and-port (.-host js/window.location)
-          ssl? (re-find #"^https" (.-origin js/window.location))]
-      (str (if ssl? "wss" "ws") "://" host-and-port "/graphql-ws"))))
+#?(:cljs
+   (defn default-ws-url []
+     (when (exists? (.-location js/window))
+       (let [host-and-port (.-host js/window.location)
+             ssl? (re-find #"^https" (.-origin js/window.location))]
+         (str (if ssl? "wss" "ws") "://" host-and-port "/graphql-ws")))))
 
 (defn generate-query-id []
   (.substr (.toString (js/Math.random) 36) 2 8))
